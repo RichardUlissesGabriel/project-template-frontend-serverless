@@ -1,0 +1,18 @@
+{
+  "name": "infrastructure",
+  "version": "1.0.0",
+  "description": "receita serverless para a criação do bucket s3 - cloudfront - route53 para a criação da infraestrutura para sites frontend",
+  "scripts": {
+    "deploy:dev": "SL_DEBUG=* serverless deploy --stage dev -v",
+    "deploy:test": "SL_DEBUG=* serverless deploy --stage test -v",
+    "deploy:homolog": "SL_DEBUG=* serverless deploy --stage homolog -v",
+    "deploy:prod": "SL_DEBUG=* serverless deploy --stage prod -v",
+    "deploy:master": "npm run deploy:prod",
+    "deploy": "npm run deploy:dev"
+  },
+  "author": "Richard Ulisses Gabriel",
+  "license": "ISC",
+  "devDependencies": {
+    "serverless": "1.61.0"
+  }
+}

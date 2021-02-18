@@ -1,0 +1,4 @@
+deploymentBucket:
+  serverless-deploys-packages
+domain:
+  "domain.com.br"

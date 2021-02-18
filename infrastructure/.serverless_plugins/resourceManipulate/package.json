@@ -1,0 +1,8 @@
+{
+  "name": "route53Manipulate",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "author": "Richard Ulisses Gabriel",
+  "license": "ISC"
+}

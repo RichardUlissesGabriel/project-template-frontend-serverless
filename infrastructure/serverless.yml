@@ -1,0 +1,157 @@
+# Criação: serverless deploy --stage=dev --aws-profile <Usuário  AWS> -v
+service: infrastructure-frontend-${self:provider.projectName}
+
+frameworkVersion: ">=1.0.0 <2.0.0"
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  region: us-east-1
+
+  deploymentBucket:
+    name: ${file(./serverless-env.yml):deploymentBucket} # Nome do bucket S3 utilizado para armazenar os arquivos de deploy
+
+  projectName: newprojectname
+  bucketName: ${self:provider.projectName}-${self:provider.stage}
+  originDomainName: ${self:provider.bucketName}.s3-website-${self:provider.region}.amazonaws.com
+  domain: ${file(./serverless-env.yml):domain}
+  urlSite: ${self:provider.stage}.${self:provider.projectName}.${self:provider.domain}
+
+resources:
+  Resources:
+
+    SiteBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.bucketName}
+        AccessControl: PublicRead
+        WebsiteConfiguration:
+          ErrorDocument: index.html
+          IndexDocument: index.html
+
+    Certificate:
+      Type: AWS::CertificateManager::Certificate
+      Properties: 
+        DomainName: ${self:provider.urlSite}
+        SubjectAlternativeNames: 
+          - '*.${self:provider.urlSite}'
+        DomainValidationOptions:
+          -
+            DomainName: ${self:provider.domain}
+        ValidationMethod: DNS
+
+    Distribution:
+      Type: AWS::CloudFront::Distribution
+      DependsOn: 
+        - SiteBucket
+        - Certificate
+      Properties:
+        DistributionConfig:
+          Aliases:
+            - ${self:provider.urlSite}
+          CustomErrorResponses:
+            -
+              ErrorCachingMinTTL: 300
+              ErrorCode: 404
+              ResponseCode: 200
+              ResponsePagePath: /index.html
+          Comment: Distribution used to referencing documentation static website
+          DefaultCacheBehavior:
+            ForwardedValues:
+              Cookies:
+                Forward: none
+              QueryString: false
+            TargetOriginId: S3-Website-${self:provider.originDomainName}
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: false
+            MinTTL: 0
+            MaxTTL: 31536000
+            DefaultTTL: 86400
+            SmoothStreaming: false
+          Enabled: true
+          Origins:
+            -
+              DomainName: ${self:provider.originDomainName}
+              Id: S3-Website-${self:provider.originDomainName}
+              CustomOriginConfig:
+                HTTPPort: 80
+                HTTPSPort: 443
+                OriginProtocolPolicy: http-only
+                OriginKeepaliveTimeout: 5
+                OriginReadTimeout: 30
+              OriginPath: ''
+          DefaultRootObject: '/index.html'
+          HttpVersion: http2
+          ViewerCertificate:
+            AcmCertificateArn:
+              Ref: Certificate
+            MinimumProtocolVersion: TLSv1.1_2016
+            SslSupportMethod: sni-only
+
+    Route53RecordSetA:
+      Type: AWS::Route53::RecordSet
+      DependsOn: Distribution
+      Properties:
+        Name: ${self:provider.urlSite}
+        Type: A
+        DomainName: ${self:provider.domain}
+        AliasTarget:
+          DNSName:
+            Fn::GetAtt:
+              - Distribution
+              - DomainName
+          EvaluateTargetHealth: false
+          HostedZoneId: Z2FDTNDATAQYW2
+
+    Route53RecordSetAAAA:
+      Type: AWS::Route53::RecordSet
+      DependsOn: Distribution
+      Properties:
+        Name: ${self:provider.urlSite}
+        Type: AAAA
+        DomainName: ${self:provider.domain}
+        AliasTarget:
+          DNSName: 
+            Fn::GetAtt:
+              - Distribution
+              - DomainName
+          EvaluateTargetHealth: false
+          HostedZoneId: Z2FDTNDATAQYW2
+    
+    cloudFrontURL:
+      Type: AWS::SSM::Parameter
+      DependsOn: Distribution
+      Properties:
+        Name: /${self:provider.projectName}/${self:provider.stage}/CLOUDFRONT
+        DataType: text
+        Type: String
+        Description: cloudfront url to access static page, and make cache invalidation
+        Tier: Standard
+        Value:
+          Ref: Distribution
+
+    s3URL:
+      Type: AWS::SSM::Parameter
+      DependsOn: SiteBucket
+      Properties:
+        Name: /${self:provider.projectName}/${self:provider.stage}/S3
+        DataType: text
+        Type: String
+        Description: cloudfront url to access static documentation page
+        Tier: Standard
+        Value: ${self:provider.bucketName}
+
+plugins:
+  - resourceManipulate
+
+package:
+  exclude:
+    - .git/**
+    - node_modules/aws-sdk/**
+    - .doc
